@@ -106,6 +106,18 @@ Push the branch only with the user's OK, and give them the compare link to open 
 
 The preview is live, the user's phone has the home-screen app showing their app in the laptop frame, and they know the loop: work in a Claude Code Cloud session → open the home-screen app → it syncs.
 
+## When the preview misbehaves: find out whose problem it is
+
+When a page errors, sign-in fails, data doesn't load, or the app looks different from local, work out whether it's the **project** or **Telescope** before changing anything:
+
+1. **Read the box's logs:** `telescope logs [project] --service next` (also `--service backend` for each extra service, and `--service telescope` for the preview proxy; `--lines 300` for more). Look for the actual error, such as a failed database connection, a missing env var, or a crash.
+2. **Reproduce the same thing locally** with the same env files: run the app or call the same endpoint on this machine. Also check that external services the app depends on are reachable from here (database host, a deployed API it calls, third-party APIs).
+3. **Decide:**
+   - **Fails locally too:** it's the project or its services, for example a paused or deleted database, an expired key, or a deployed backend that's down. Tell the user plainly what's broken and where to fix it; Telescope is fine.
+   - **Works locally, fails only in the preview:** it's preview-specific. Common causes: a URL in the env pointing at `localhost` that the browser uses (the phone can't reach it; route those calls through the Next app instead), an auth provider or CORS list that doesn't include the preview URL, or env that `telescope env push` hasn't sent yet. Fix what you can on a `claude/telescope/*` branch; if it looks like a Telescope bug, send feedback (below).
+
+Apps that swallow errors (for example an empty list when a fetch fails) are common, so don't trust an empty page; check the logs.
+
 ## When something doesn't work: send feedback
 
 Telescope learns which stacks and setups to support next from feedback. **Offer to send it** whenever onboarding fails, part of the repo can't be previewed, the stack isn't supported (a framework other than Next.js, Docker-only services, a sandbox or agent-orchestrator setup, an unusual auth flow), or the user asks:
@@ -126,6 +138,7 @@ Write the message as a short, specific report, e.g. `Onboarding email-tracker: N
 | See or remove paired devices | `telescope devices [project]`, `telescope devices revoke <id> [project]` |
 | Repair a preview | `telescope up` inside the repo |
 | Delete a preview (destroys the box and its env files) | `telescope down <project>`. Confirm with the user first, then pass `--yes`. |
+| See what the preview box is logging | `telescope logs [project] [--service <name>] [--lines <n>]` |
 | Report a problem or a missing stack | `telescope feedback "<message>" [--project <name>]` |
 
 Limits: 3 projects per account, one preview awake at a time (opening another puts the previous one to sleep), and 4 awake hours per day (resets at midnight UTC). Previews sleep when unused and wake when opened. Keep-warm (up to 30 minutes) and **Sleep now** are in the toolbar inside the preview.
