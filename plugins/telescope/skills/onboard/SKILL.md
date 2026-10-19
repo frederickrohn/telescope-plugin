@@ -106,6 +106,16 @@ Push the branch only with the user's OK, and give them the compare link to open 
 
 The preview is live, the user's phone has the home-screen app showing their app in the laptop frame, and they know the loop: work in a Claude Code Cloud session → open the home-screen app → it syncs.
 
+## When something doesn't work: send feedback
+
+Telescope learns which stacks and setups to support next from feedback. **Offer to send it** whenever onboarding fails, part of the repo can't be previewed, the stack isn't supported (a framework other than Next.js, Docker-only services, a sandbox or agent-orchestrator setup, an unusual auth flow), or the user asks:
+
+```bash
+telescope feedback "<what was being set up, what failed or isn't supported, and what the user wanted>" --project <name>
+```
+
+Write the message as a short, specific report, e.g. `Onboarding email-tracker: Next 16 dashboard + FastAPI backend. Dashboard calls the backend from the browser at NEXT_PUBLIC_BACKEND_URL=localhost:8000, which can't work on the phone; worked around with a Next rewrite to /backend. User also has a Chrome extension (not previewable).` The CLI attaches its version, the OS, the repo's name and the last error automatically. **Never include code, env values, secrets or personal data**, and show the user the message before sending it.
+
 ## Managing previews afterwards
 
 | User wants to | Run |
@@ -116,5 +126,6 @@ The preview is live, the user's phone has the home-screen app showing their app 
 | See or remove paired devices | `telescope devices [project]`, `telescope devices revoke <id> [project]` |
 | Repair a preview | `telescope up` inside the repo |
 | Delete a preview (destroys the box and its env files) | `telescope down <project>`. Confirm with the user first, then pass `--yes`. |
+| Report a problem or a missing stack | `telescope feedback "<message>" [--project <name>]` |
 
 Limits: 3 projects per account, one preview awake at a time (opening another puts the previous one to sleep), and 4 awake hours per day (resets at midnight UTC). Previews sleep when unused and wake when opened. Keep-warm (up to 30 minutes) and **Sleep now** are in the toolbar inside the preview.
