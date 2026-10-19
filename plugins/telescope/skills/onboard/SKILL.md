@@ -12,7 +12,8 @@ You drive Telescope through its CLI, `telescope` (npm package `usetelescope`). T
 The user is usually setting this up on the go and wants to act, not decode. Every time they have to do something themselves (in GitHub, Supabase, Google Cloud, Clerk, a terminal, their phone):
 
 - **Lead with the action.** Put "here's what you need to do" first, as a numbered list, before explanations. Never bury a required step in a paragraph.
-- **Name the exact place:** the service, then the exact menu path, then the field. For example, "**Supabase** (not GitHub) → your project → Authentication → URL Configuration → Redirect URLs → **Add URL**".
+- **Give a clickable link to the exact page whenever one exists**, filled in with the user's real IDs (project ref, repo, app), so they don't have to navigate. Then name the field on that page. Add the menu path only as a fallback.
+- **Name the exact place:** the service, then the field. For example, "**Supabase** (not GitHub): open https://supabase.com/dashboard/project/abcd1234/auth/url-configuration → **Redirect URLs → Add URL**".
 - **Give the exact value, fully filled in**, in its own code block so it can be copied. Never hand over a template like `https://<preview-host>/...` once you know the real host.
 - **Say what kind of thing it is** ("this is a URL, not a key") and **what it's for** in one short clause ("so Google can send you back to the preview after sign-in").
 - **Be explicit about scope:** "add, don't replace", "delete both of these", "only this repo".
@@ -92,8 +93,8 @@ telescope up --config <path to the config file>
 ```
 
 - **The Telescope GitHub App:** on a repo's first run, the CLI opens GitHub's page for the `telescope-preview` app. Tell the user exactly what they'll see:
-  - **If the app isn't installed on their account yet** (they see an **Install** button): choose their account → **Only select repositories** → select this repo → **Install**.
-  - **If it's already installed for other repos** (they see **Configure**): under **Repository access**, keep **Only select repositories** → **Select repositories** → add this repo → **Save**.
+  - **If the app isn't installed on their account yet** (they see an **Install** button, https://github.com/apps/telescope-preview/installations/new): choose their account → **Only select repositories** → select this repo → **Install**.
+  - **If it's already installed for other repos** (they see **Configure**; also reachable from https://github.com/settings/installations → telescope-preview → **Configure**): under **Repository access**, keep **Only select repositories** → **Select repositories** → add this repo → **Save**.
   - Then press **Enter** in the terminal. The app only gets read access to the repos they choose.
 - It creates the preview box, copies env files, installs dependencies, starts the services and prints the preview URL. Expect one to two minutes on the first run.
 - If no phone is paired yet, it opens a QR code in the browser at the end (step 7).
@@ -123,12 +124,12 @@ For problems from step 2 that need code changes, make them on a `claude/telescop
 
 The preview's address comes from `telescope ls` (for example `https://email-tracker-aa801e-b4u72.sprites.app`). It stays the same for the life of the project, so each of these is a one-time step. Give each item in the format from "How to talk to the user", fully filled in. Common ones:
 
-- **Supabase Auth:** **Supabase** → the app's project → **Authentication → URL Configuration → Redirect URLs → Add URL**, then paste the app's callback path on the preview host with a trailing `**` (find the path in the app's `redirectTo`), for example `https://<host>/auth/callback**` → **Save**. Nothing changes on the GitHub or Google side.
-- **Google OAuth (Auth.js/NextAuth, or direct):** **Google Cloud Console** → APIs & Services → **Credentials** → the app's OAuth 2.0 Client ID → **Authorized redirect URIs → Add URI**: `https://<host>/api/auth/callback/google` → **Save**. Google allows several redirect URIs, so this is added alongside the existing ones.
-- **GitHub OAuth (Auth.js):** GitHub OAuth Apps allow only **one** callback URL, so the user creates a separate "preview" OAuth App (github.com → Settings → Developer settings → **OAuth Apps → New OAuth App**) with callback `https://<host>/api/auth/callback/github`, puts its client ID and secret in the preview env file, and you run `telescope env push`.
-- **Clerk:** a development instance (`pk_test_…`) needs nothing; a production instance (`pk_live_…`) needs the preview domain added in the Clerk dashboard.
+- **Supabase Auth:** open `https://supabase.com/dashboard/project/<ref>/auth/url-configuration`, where `<ref>` is the subdomain of the app's `NEXT_PUBLIC_SUPABASE_URL` (`https://<ref>.supabase.co`; reading the host is fine, it isn't secret) → **Redirect URLs → Add URL**, then paste the app's callback path on the preview host with a trailing `**` (find the path in the app's `redirectTo`), for example `https://<host>/auth/callback**` → **Save**. Nothing changes on the GitHub or Google side.
+- **Google OAuth (Auth.js/NextAuth, or direct):** open https://console.cloud.google.com/apis/credentials (select the app's Google Cloud project if asked) → the app's **OAuth 2.0 Client ID** → **Authorized redirect URIs → Add URI**: `https://<host>/api/auth/callback/google` → **Save**. Google allows several redirect URIs, so this is added alongside the existing ones.
+- **GitHub OAuth (Auth.js):** GitHub OAuth Apps allow only **one** callback URL, so the user creates a separate "preview" OAuth App at https://github.com/settings/applications/new with callback `https://<host>/api/auth/callback/github`, puts its client ID and secret in the preview env file, and you run `telescope env push`.
+- **Clerk:** a development instance (`pk_test_…`) needs nothing; a production instance (`pk_live_…`) needs the preview domain added under **Domains** at https://dashboard.clerk.com (select the app).
 - **Backend CORS:** if the browser still calls a backend directly, add `https://<host>` to its allowed origins (a code change, on the branch).
-- **reCAPTCHA, Google Maps and other key-restricted services:** add the preview's domain (`<host>`, no `https://`) to the key's allowed domains in that service's console.
+- **reCAPTCHA, Google Maps and other key-restricted services:** add the preview's domain (`<host>`, no `https://`) to the key's allowed domains: reCAPTCHA at https://www.google.com/recaptcha/admin (the site → settings → **Domains**), Maps and other Google API keys at https://console.cloud.google.com/apis/credentials (the key → **Website restrictions**).
 
 Telescope sets `AUTH_URL` and `NEXTAUTH_URL` to the preview address automatically. Never suggest a wildcard across `*.sprites.app`: every Telescope preview shares that domain.
 
@@ -153,7 +154,7 @@ If something fails, follow "When the preview misbehaves" below before changing a
 
 ## 9. Wire Claude Code Cloud to the preview
 
-1. **The Claude GitHub App must be installed on this repo**, or Cloud sessions can't push. A public repo clones fine without it, then fails on the first push with a 403 that looks like an account problem. Tell the user: **github.com → Settings → Applications → Installed GitHub Apps → Claude → Configure → Repository access** → add this repo → **Save** (or install it from claude.ai/connect-github if Claude isn't listed).
+1. **The Claude GitHub App must be installed on this repo**, or Cloud sessions can't push. A public repo clones fine without it, then fails on the first push with a 403 that looks like an account problem. Tell the user: open https://github.com/settings/installations → **Claude → Configure → Repository access** → add this repo → **Save** (or install it from https://claude.ai/connect-github if Claude isn't listed).
 2. Offer to add this to the repo's **root** `CLAUDE.md` (create it if missing), on a **review branch, never main**, using a temporary git worktree so the user's checkout isn't disturbed:
 
 ```markdown
@@ -165,7 +166,7 @@ This repo is previewed on a phone through Telescope, which syncs the newest `cla
 - End every turn that changed code with `git commit` and `git push` to that branch, so the preview can sync it.
 ```
 
-Push the branch only with the user's OK, and give them the compare link to open a PR.
+Push the branch only with the user's OK, and give them the compare link to open a PR: `https://github.com/<owner>/<repo>/compare/<base>...<branch>`, filled in.
 
 ## Done when
 
