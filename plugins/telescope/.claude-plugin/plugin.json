@@ -1,8 +1,8 @@
 {
   "name": "telescope",
   "displayName": "Telescope",
-  "version": "0.1.4",
-  "description": "Onboard a repo onto Telescope so you can preview its Next.js app on your phone while Claude Code edits it",
+  "version": "0.1.5",
+  "description": "Onboard a repo onto Telescope so you can preview its web app (Next.js or Vite) on your phone while Claude Code edits it",
   "author": { "name": "Telescope" },
-  "keywords": ["preview", "mobile", "nextjs", "pwa"]
+  "keywords": ["preview", "mobile", "nextjs", "vite", "pwa"]
 }

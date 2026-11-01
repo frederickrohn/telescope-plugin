@@ -3,7 +3,7 @@ name: onboard
 description: Onboard a repo onto Telescope so its web app can be previewed on a phone, at real desktop size, while Claude Code Cloud edits it. Use when the user wants to set up, onboard or "telescope up" a repo, preview their app on their phone, pair a phone with a preview, push env vars to a preview, debug a broken preview, or manage or remove Telescope previews.
 ---
 
-Telescope gives a repo a private **preview box** in the cloud. The box runs the app's `next dev`, plus any backend the app needs, and serves it to the user's phone as a home-screen app inside a 1440×900 "laptop frame". Opening the app syncs the newest `claude/telescope/*` branch that Claude Code Cloud pushed.
+Telescope gives a repo a private **preview box** in the cloud. The box runs the app's dev server (`next dev`, or a Vite-based one: Vite with React, Vue or Svelte, SvelteKit, Astro, Nuxt, React Router v7), plus any backend the app needs, and serves it to the user's phone as a home-screen app inside a 1440×900 "laptop frame". Opening the app syncs the newest `claude/telescope/*` branch that Claude Code Cloud pushed.
 
 You drive Telescope through its CLI, `telescope` (npm package `usetelescope`). This skill covers onboarding a repo that already exists on this machine, fixing what stops it from working in the preview, and managing previews afterwards.
 
@@ -27,27 +27,38 @@ The user is usually setting this up on the go and wants to act, not decode. Ever
 
 ## 1. Find the repo
 
-You need the **local checkout**, because env files live there, and you run `telescope up` from inside it. Its GitHub remote (`git remote get-url origin`) must be on github.com. If the user names a project without a path, look for a `package.json` that depends on `next` in their usual project folders.
+You need the **local checkout**, because env files live there, and you run `telescope up` from inside it. Its GitHub remote (`git remote get-url origin`) must be on github.com. If the user names a project without a path, look for a `package.json` that depends on `next`, `vite` or one of the frameworks in step 2 in their usual project folders.
 
 ## 2. Survey the repo: what can and can't be previewed
 
 Finding facts is your job; don't ask the user for anything you can read. Look at the whole repo, not only the web app.
 
 **What Telescope can run:**
-- **The web app:** a Next.js app, in the directory whose `package.json` depends on `next` (the repo root or a subfolder such as `frontend/`, `web/` or `apps/web`). Installs are automatic from its lockfile (npm, pnpm, yarn or bun).
+- **The web app:** in the directory whose `package.json` depends on the framework (the repo root or a subfolder such as `frontend/`, `web/` or `apps/web`). Installs are automatic from its lockfile (npm, pnpm, yarn or bun). Pick its `frontend.framework` for the config (step 3) from the dependencies, checking in this order:
+
+  | Dependency | `framework` | Dev server Telescope runs |
+  | --- | --- | --- |
+  | `next` | `next` | `next dev` |
+  | `nuxt` | `nuxt` | `nuxt dev` |
+  | `astro` | `astro` | `astro dev` |
+  | `@react-router/dev` (React Router v7, framework mode) | `react-router` | `react-router dev` |
+  | `@remix-run/dev` plus `vite` (Remix v2 on Vite) | `remix` | `remix vite:dev` |
+  | `@sveltejs/kit`, or `vite` (React, Vue, Svelte, Solid, Preact, …) | `vite` | `vite dev` |
+
+  Telescope always starts it on `127.0.0.1:3000` and allows the preview's address as a Vite host, so the repo needs no config changes. If the app's `dev` script does more than start the framework (for example it also runs a CSS watcher or a codegen step), set `frontend.command` to the argv that starts it on `127.0.0.1:3000`, and run the other part as a service.
 - **Local backends the web app needs** (FastAPI, Express, Django, …): find each one's folder, one-time install command, start command and port (from the README, `requirements.txt`/`pyproject.toml`, `package.json` scripts, `Procfile` or `docker-compose.yml`). These run as extra services on the box, bound to `127.0.0.1`, with file watching (`uvicorn --reload`, `nodemon`, `tsx watch`) so synced changes apply without a restart.
 
 **What it can't run.** Find these and tell the user up front; set up the parts that can run anyway:
 - browser extensions (`manifest.json` with `manifest_version`), mobile apps (React Native, Expo, Swift, Kotlin), desktop apps, CLIs, cron jobs and background workers that aren't started by the web app;
 - Docker-only services (Postgres or Redis via `docker-compose`). Suggest a hosted dev instance (Neon, Supabase, Upstash) in the env file instead;
 - popup-based sign-in (`signInWithPopup`, popup modes). Suggest the provider's redirect mode;
-- web frameworks other than Next.js aren't supported yet. Say so, and offer to send feedback (see below).
+- web apps that run neither Next.js nor Vite (Angular, Create React App or other webpack setups, Gatsby, Ember, Remix v2 on its classic compiler, server-rendered apps like Rails or Django templates) aren't supported yet. Say so, and offer to send feedback (see below).
 
 **Env files:** `.env`, `.env.local` and `.env.development*` in the app folder and at the repo root. Never include `.env.production*`. **Print variable names only, never values:** `sed -E 's/=.*//' <file> | grep -v '^#'`. When you need to know where a URL points, print only its host and port.
 
 **Then check for the problems that break previews** (each of these came up in real onboardings):
 
-1. **Browser calls to a local backend.** If a `NEXT_PUBLIC_*` variable (or code running in the browser) points at `localhost` or `127.0.0.1`, it can't work: on the phone, `localhost` is the phone itself. Plan to route those calls through the Next app instead (step 5).
+1. **Browser calls to a local backend.** If a browser-exposed variable (`NEXT_PUBLIC_*`, `VITE_*`, `PUBLIC_*` in SvelteKit and Astro, `NUXT_PUBLIC_*`) or other code running in the browser points at `localhost` or `127.0.0.1`, it can't work: on the phone, `localhost` is the phone itself. Plan to route those calls through the dev server instead (step 5).
 2. **CORS and other domain allowlists.** Check the backend's allowed origins (for example FastAPI `CORSMiddleware`, Express `cors()`), and anything else that only works on listed domains: OAuth providers, reCAPTCHA site keys, Google Maps keys, Stripe, Supabase redirect URLs. The preview has its own address, so each of these needs it added (step 6).
 3. **Production data.** If an env var points at a real production database, storage bucket or API, warn the user that actions in the preview change real data, and suggest a dev instance.
 4. **Paid API keys** (OpenAI, Anthropic, Stripe, and so on): clicks in the preview spend real money. Recommend dev or test keys with a spend cap set at the provider.
@@ -61,7 +72,8 @@ Write it to a temporary file **outside the repo** (for example `$(mktemp -d)/tel
 {
   "name": "<lowercase-dashes, 2-40 chars; becomes the project name>",
   "title": "<short home-screen name>",
-  "app": "<Next app folder relative to the repo root, or .>",
+  "app": "<web app folder relative to the repo root, or .>",
+  "frontend": { "framework": "<next | vite | astro | nuxt | react-router | remix, from step 2>" },
   "env": [{ "from": "<local env file, relative to the repo root>", "to": "<where the app reads it, relative to the repo root>" }],
   "services": [
     { "name": "backend", "dir": "backend", "setup": "<one-time install>", "cmd": "<binary; relative to dir if it contains a slash>", "args": ["..."] }
@@ -72,9 +84,10 @@ Write it to a temporary file **outside the repo** (for example `$(mktemp -d)/tel
 }
 ```
 
-- `services` is only for extra processes; `next dev` and Telescope's own proxy are added automatically. Omit `services` and `syncHooks` for a plain Next app. Service names `next` and `telescope` are reserved.
+- Always set `frontend.framework`. Left out, it means `next` (older CLIs don't detect it).
+- `services` is only for extra processes; the dev server and Telescope's own proxy are added automatically. Omit `services` and `syncHooks` for a plain web app. The dev server's service is called `next` for Next apps and `dev` for the others; that name and `telescope` are reserved.
 - Add a `syncHooks` entry for each non-JS dependency file, so a synced change reinstalls and restarts that service. JS lockfiles (including ones in subfolders) are handled automatically.
-- **Preview-only env values:** when the preview needs a different value than local development (for example `NEXT_PUBLIC_BACKEND_URL=/backend`, or a dev database), copy the env file to a preview version such as `.env.telescope.local`, change only those values, make sure it's gitignored, and point `from` at it (keeping `to` as the file the app reads). The user's normal local setup stays untouched.
+- **Preview-only env values:** when the preview needs a different value than local development (for example `NEXT_PUBLIC_BACKEND_URL=/backend` or `VITE_API_URL=/backend`, or a dev database), copy the env file to a preview version such as `.env.telescope.local`, change only those values, make sure it's gitignored, and point `from` at it (keeping `to` as the file the app reads). The user's normal local setup stays untouched.
 
 **Before running anything, show the user one summary, in this order:**
 1. **What will be previewed** (the web app, and each backend as a service) and **what won't be**, with the reason (for example "your Chrome extension: Telescope can't run browser extensions").
@@ -109,7 +122,7 @@ Errors you may see:
 
 For problems from step 2 that need code changes, make them on a `claude/telescope/<short-name>` branch (the preview follows these). Never change the user's main branch or production config without asking. Keep every change **inert in production**.
 
-- **Browser calls to a local backend:** add a rewrite in `next.config.*` so the browser calls the Next app and Next forwards to the backend on the box, then set the preview-only env value to the relative path:
+- **Browser calls to a local backend:** make the dev server forward a path to the backend on the box, so the browser calls the app's own address, then set the preview-only env value to the relative path. Next.js, a rewrite in `next.config.*`:
 
   ```ts
   async rewrites() {
@@ -117,7 +130,17 @@ For problems from step 2 that need code changes, make them on a `claude/telescop
   }
   ```
 
-  Preview env (`.env.telescope.local`): `NEXT_PUBLIC_BACKEND_URL=/backend`. Production keeps its absolute URL, so the rewrite is never used there. These requests now come from the same origin, so CORS no longer applies to them.
+  Vite, SvelteKit, Astro and React Router, `server.proxy` in `vite.config.*` (Astro: under `vite:` in `astro.config.*`); it only applies to the dev server:
+
+  ```ts
+  server: {
+    proxy: { "/backend": { target: "http://127.0.0.1:8000", rewrite: (p) => p.replace(/^\/backend/, "") } },
+  },
+  ```
+
+  Nuxt, in `nuxt.config.*`: `nitro: { devProxy: { "/backend": { target: "http://127.0.0.1:8000", changeOrigin: true } } }`.
+
+  Preview env (`.env.telescope.local`): `NEXT_PUBLIC_BACKEND_URL=/backend` (or `VITE_API_URL=/backend`, and so on). Production keeps its absolute URL, so the forward is never used there. These requests now come from the same origin, so CORS no longer applies to them.
 - Push the branch with the user's OK, then run `telescope env push` if the env changed. The preview picks up the branch the next time it's opened.
 
 ## 6. External settings the user has to change
@@ -131,7 +154,7 @@ The preview's address comes from `telescope ls` (for example `https://email-trac
 - **Backend CORS:** if the browser still calls a backend directly, add `https://<host>` to its allowed origins (a code change, on the branch).
 - **reCAPTCHA, Google Maps and other key-restricted services:** add the preview's domain (`<host>`, no `https://`) to the key's allowed domains: reCAPTCHA at https://www.google.com/recaptcha/admin (the site → settings → **Domains**), Maps and other Google API keys at https://console.cloud.google.com/apis/credentials (the key → **Website restrictions**).
 
-Telescope sets `AUTH_URL` and `NEXTAUTH_URL` to the preview address automatically. Never suggest a wildcard across `*.sprites.app`: every Telescope preview shares that domain.
+Telescope sets `AUTH_URL` (and `NEXTAUTH_URL` for Next apps) to the preview address automatically. Never suggest a wildcard across `*.sprites.app`: every Telescope preview shares that domain.
 
 ## 7. Pair the phone
 
@@ -148,7 +171,7 @@ Never paste the pairing link into chat; the QR page keeps it out of the conversa
 You can't open the preview yourself (only paired devices can), so verify in two ways:
 
 - **Ask the user to check specific things,** for example "Does the dashboard load? Tap **Sign in with Google**: do you end up signed in? Do your emails show up?"
-- **Read the box's logs** while they try: `telescope logs --service next`, plus `--service backend` for each backend. Look for real errors even if the page "looks fine". Apps often swallow errors and just show an empty list.
+- **Read the box's logs** while they try: `telescope logs` (the dev server), plus `--service backend` for each backend. Look for real errors even if the page "looks fine". Apps often swallow errors and just show an empty list.
 
 If something fails, follow "When the preview misbehaves" below before changing anything.
 
@@ -176,7 +199,7 @@ The preview is live, the user has checked on their phone that the app works (sig
 
 When a page errors, sign-in fails, data doesn't load, or the app looks different from local, work out whether it's the **project** or **Telescope** before changing anything:
 
-1. **Read the box's logs:** `telescope logs [project] --service next` (also `--service backend` for each extra service, and `--service telescope` for the preview proxy; `--lines 300` for more). Look for the actual error, such as a failed database connection, a missing env var, or a crash.
+1. **Read the box's logs:** `telescope logs [project]` for the dev server (also `--service backend` for each extra service, and `--service telescope` for the preview proxy; `--lines 300` for more). Look for the actual error, such as a failed database connection, a missing env var, or a crash.
 2. **Reproduce the same thing locally** with the same env files: run the app or call the same endpoint on this machine, and re-check that external services are reachable (step 2, item 5).
 3. **Decide:**
    - **Fails locally too:** it's the project or its services, for example a paused or deleted database, an expired key, or a deployed backend that's down. Tell the user plainly what's broken and exactly where to fix it; Telescope is fine.
@@ -184,7 +207,7 @@ When a page errors, sign-in fails, data doesn't load, or the app looks different
 
 ## When something doesn't work: send feedback
 
-Telescope learns which stacks and setups to support next from feedback. **Offer to send it** whenever onboarding fails, part of the repo can't be previewed, the stack isn't supported (a framework other than Next.js, Docker-only services, a sandbox or agent-orchestrator setup, an unusual auth flow), or the user asks:
+Telescope learns which stacks and setups to support next from feedback. **Offer to send it** whenever onboarding fails, part of the repo can't be previewed, the stack isn't supported (a web framework that isn't Next.js or Vite-based, Docker-only services, a sandbox or agent-orchestrator setup, an unusual auth flow), or the user asks:
 
 ```bash
 telescope feedback "<what was being set up, what failed or isn't supported, and what the user wanted>" --project <name>
