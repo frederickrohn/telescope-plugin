@@ -1,6 +1,6 @@
 {
   "name": "telescope",
-  "description": "Telescope: preview your web app (Next.js or Vite) on your phone while Claude Code edits it",
+  "description": "Telescope: preview your web app (Next.js, Vite, or plain HTML/CSS/JS) on your phone while Claude Code edits it",
   "owner": { "name": "Telescope" },
   "plugins": [
     {

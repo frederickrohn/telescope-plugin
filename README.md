@@ -1,6 +1,6 @@
 # Telescope plugin for Claude Code
 
-Preview your web app (Next.js or Vite) on your phone, at real desktop size, while Claude Code edits it.
+Preview your web app (Next.js, Vite, or plain HTML/CSS/JS with its backend) on your phone, at real desktop size, while Claude Code edits it.
 
 ```
 /plugin marketplace add frederickrohn/telescope-plugin
