@@ -34,7 +34,16 @@ The user is usually setting this up on the go and wants to act, not decode. Ever
 
 ## 1. Find the repo
 
-You need the **local checkout**, because env files live there, and you run `telescope up` from inside it. Its GitHub remote (`git remote get-url origin`) must be on github.com. If the user names a project without a path, look for a `package.json` that depends on `next`, `vite` or one of the frameworks in step 2 in their usual project folders.
+You need the **local checkout on the user's own machine**, because env files live there, and you run `telescope up` from inside it. Its GitHub remote (`git remote get-url origin`) must be on github.com.
+
+- **Started inside the repo:** use the current folder (`git rev-parse --show-toplevel`).
+- **Started somewhere else:** don't go looking through their folders on your own. Stop and ask which they prefer, recommending the first:
+  1. **(Recommended) Reopen Claude Code inside the repo**, so everything this setup reads and changes is limited to that project. Give them the steps:
+     - Terminal: `cd <path to the repo>` then `claude`, then ask again: "Set up this repo on Telescope".
+     - Claude desktop app: open a new Claude Code session and choose the repo's folder, then ask again.
+     - Not sure where the repo is? `git clone https://github.com/<owner>/<repo>.git` makes a fresh copy, but env files (`.env`…) aren't in git, so the usual checkout is better.
+  2. **Let you search their usual project folders** (`~/code`, `~/projects`, `~/dev`, `~/Desktop`, `~/Documents`, home) for it. Only on a yes: look at folder names and `git remote get-url origin` only, not file contents, for a checkout matching the project. Show the path you found and get a yes before using it, then `cd` into it for every command. If nothing matches, ask for the path.
+- **In a cloud or remote session** (no local checkout, no env files): stop and tell the user to open Claude Code on their laptop inside the repo and ask again, because the setup needs their local env files.
 
 ## 2. Survey the repo: what can and can't be previewed
 
